@@ -590,6 +590,13 @@ MACRO_CONFIG_INT(SvRejoinTeam0, sv_rejoin_team_0, 1, 0, 1, CFGFLAG_SERVER, "Make
 
 MACRO_CONFIG_INT(SvNoWeakHook, sv_no_weak_hook, 0, 0, 1, CFGFLAG_SERVER | CFGFLAG_GAME, "Whether to use an alternative calculation for world ticks, that makes the hook behave like all players have strong.")
 
+// Auto-hook save from freeze
+MACRO_CONFIG_INT(SvAutoHookSaveEnable, sv_auto_hook_save_enable, 0, 0, 1, CFGFLAG_SERVER, "Enable auto-hook save from freeze traps")
+MACRO_CONFIG_INT(SvAutoHookSavePredictionTicks, sv_auto_hook_save_prediction_ticks, 20, 5, 100, CFGFLAG_SERVER, "How many ticks ahead to predict freeze collision for auto-hook")
+MACRO_CONFIG_FLOAT(SvAutoHookSaveScanRadius, sv_auto_hook_save_scan_radius, 400.0f, 100.0f, 1000.0f, CFGFLAG_SERVER, "Scan radius for hookable tiles for auto-hook save")
+MACRO_CONFIG_INT(SvAutoHookSaveCooldown, sv_auto_hook_save_cooldown, 1000, 0, 10000, CFGFLAG_SERVER, "Cooldown in milliseconds between auto-hook save attempts for a player")
+MACRO_CONFIG_INT(SvAutoHookSaveCheckInterval, sv_auto_hook_save_check_interval, 5, 1, 50, CFGFLAG_SERVER, "Tick interval to check for auto-hook save")
+
 MACRO_CONFIG_INT(ClReconnectTimeout, cl_reconnect_timeout, 120, 0, 600, CFGFLAG_CLIENT | CFGFLAG_SAVE, "How many seconds to wait before reconnecting (after timeout, 0 for off)")
 MACRO_CONFIG_INT(ClReconnectFull, cl_reconnect_full, 5, 0, 600, CFGFLAG_CLIENT | CFGFLAG_SAVE, "How many seconds to wait before reconnecting (when server is full, 0 for off)")
 

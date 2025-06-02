@@ -106,6 +106,8 @@ public:
 	void AddVelocity(vec2 Addition);
 	void ApplyMoveRestrictions();
 
+	bool PredictFreezeCollision(int TicksToPredict);
+
 private:
 	// player controlling this character
 	class CPlayer *m_pPlayer;
@@ -164,7 +166,10 @@ private:
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
 
 	// DDRace
+	int m_TicksSinceLastFreezePrediction;
 
+	bool FindHookTargetTile(const vec2& PredictedFreezePos, vec2& HookTargetPos);
+	bool TryAutoHookSave();
 	void SnapCharacter(int SnappingClient, int Id);
 	static bool IsSwitchActiveCb(int Number, void *pUser);
 	void SetTimeCheckpoint(int TimeCheckpoint);
@@ -183,6 +188,7 @@ private:
 
 	bool m_SetSavePos[NUM_RESCUEMODES];
 	CSaveTee m_RescueTee[NUM_RESCUEMODES];
+	int m_LastAutoHookTick;
 
 public:
 	CGameTeams *Teams() { return m_pTeams; }

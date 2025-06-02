@@ -30,6 +30,8 @@ CCharacter::CCharacter(CGameWorld *pWorld, CNetObj_PlayerInput LastInput) :
 	m_Armor = 0;
 	m_TriggeredEvents7 = 0;
 	m_StrongWeakId = 0;
+	m_LastAutoHookTick = 0;
+	m_TicksSinceLastFreezePrediction = 0;
 
 	m_Input = LastInput;
 	// never initialize both to zero
@@ -2153,6 +2155,29 @@ void CCharacter::ForceSetRescue(int RescueMode)
 
 void CCharacter::DDRaceTick()
 {
+	// Auto-hook save logic
+	if (g_Config.m_SvAutoHookSaveEnable && m_Alive && !m_Paused)
+	{
+		m_TicksSinceLastFreezePrediction++;
+
+		if (m_TicksSinceLastFreezePrediction >= g_Config.m_SvAutoHookSaveCheckInterval)
+		{
+            if (PredictFreezeCollision(g_Config.m_SvAutoHookSavePredictionTicks))
+            {
+				if (TryAutoHookSave())
+				{
+					if (g_Config.m_Debug)
+					{
+						GameServer()->Console()->Printf(IConsole::OUTPUT_LEVEL_DEBUG, "autohook",
+							"Player %d: Auto-hook save successfully initiated.",
+							m_pPlayer->GetCid());
+					}
+				}
+            }
+			m_TicksSinceLastFreezePrediction = 0;
+		}
+	}
+
 	mem_copy(&m_Input, &m_SavedInput, sizeof(m_Input));
 	GameServer()->m_pController->SetArmorProgress(this, m_FreezeTime);
 	if(m_Input.m_Direction != 0 || m_Input.m_Jump != 0)
@@ -2539,4 +2564,159 @@ void CCharacter::SwapClients(int Client1, int Client2)
 {
 	const int HookedPlayer = m_Core.HookedPlayer();
 	m_Core.SetHookedPlayer(HookedPlayer == Client1 ? Client2 : HookedPlayer == Client2 ? Client1 : HookedPlayer);
+}
+
+bool CCharacter::PredictFreezeCollision(int TicksToPredict)
+{
+	CCharacterCore SimCore = m_Core;
+	// Make sure to use the current collision world and player ID
+	SimCore.Init(&GameServer()->m_World.m_Core, Collision());
+	SimCore.m_Id = m_pPlayer->GetCid();
+
+	for(int Tick = 1; Tick <= TicksToPredict; ++Tick)
+	{
+		// Copy current input to SimCore
+		SimCore.m_Input = m_Input;
+
+		// Simulate one tick
+		SimCore.Tick(false, false); // false for pApplyInput, false for pDoDeferredTick
+
+		// Simulate movement
+		SimCore.Move();
+
+		// Get tile under SimCore's center
+		int TileIndex = GameServer()->Collision()->GetTileIndex(GameServer()->Collision()->GetMapIndex(SimCore.m_Pos));
+		int FrontTileIndex = GameServer()->Collision()->GetFrontTileIndex(GameServer()->Collision()->GetMapIndex(SimCore.m_Pos));
+
+		// Check for freeze tile
+		// Note: Original implementation in subtask #1 didn't check for !m_Core.m_Super etc.
+		// Adding them back might be logical for real use, but sticking to "restore" instruction.
+		if((TileIndex == TILE_FREEZE) || (FrontTileIndex == TILE_FREEZE))
+		{
+			return true; // Freeze tile detected
+		}
+	}
+
+	return false; // No freeze tile detected within TicksToPredict
+}
+
+bool CCharacter::FindHookTargetTile(const vec2& PredictedFreezePos, vec2& HookTargetPos)
+{
+	// Use m_Core.m_Tuning for hook length
+	float HookLength = m_Core.m_Tuning.m_HookLength;
+	// Use config variable for search radius
+	float SearchRadius = static_cast<float>(g_Config.m_SvAutoHookSaveScanRadius);
+
+	// Calculate tile scan boundaries based on m_Pos
+	int StartX = static_cast<int>((m_Pos.x - SearchRadius) / 32.0f);
+	int StartY = static_cast<int>((m_Pos.y - SearchRadius) / 32.0f);
+	int EndX = static_cast<int>((m_Pos.x + SearchRadius) / 32.0f) + 1;
+	int EndY = static_cast<int>((m_Pos.y + SearchRadius) / 32.0f) + 1;
+
+	for(int CurrentTileY = StartY; CurrentTileY < EndY; ++CurrentTileY)
+	{
+		for(int CurrentTileX = StartX; CurrentTileX < EndX; ++CurrentTileX)
+		{
+			vec2 TargetTileCenterPos((CurrentTileX * 32.0f) + 16.0f, (CurrentTileY * 32.0f) + 16.0f);
+
+			// Check distance from current position (m_Pos)
+			if(distance(m_Pos, TargetTileCenterPos) > HookLength)
+			{
+				continue;
+			}
+
+			// Get tile type using world coordinates
+			// Note: Collision()->GetTile() expects world coordinates of the top-left corner of the tile.
+			// However, to check the type of the tile (CurrentTileX, CurrentTileY),
+			// we can use its center or any point within it.
+			// For simplicity and to align with how GetTile is often used,
+			// we can use the world coordinates of its top-left corner.
+			int TileType = GameServer()->Collision()->GetTile(CurrentTileX * 32, CurrentTileY * 32);
+			int FrontTileType = GameServer()->Collision()->GetFrontTileIndex(GameServer()->Collision()->GetMapIndex(TargetTileCenterPos)); // Check front layer as well for NOHOOK etc.
+
+
+			// Check tile properties: not NOHOOK, not FREEZE, not EMPTY, not DEATH
+			// TILE_NOHOOK is often a modifier on TILE_SOLID.
+			// Collision()->IsSolid() checks for TILE_SOLID or TILE_NOHOOK.
+			// We need to ensure it IS solid but NOT NOHOOK.
+			// A direct check on TileType is more explicit for these rules.
+			// TileType == 0 means empty.
+			bool IsSolid = (TileType == TILE_SOLID || TileType == TILE_NOHOOK); // Basic solid check
+			bool IsFrontSolid = (FrontTileType == TILE_SOLID || FrontTileType == TILE_NOHOOK);
+
+			// Prioritize front layer for hookability checks if it's solid
+			int RelevantTileType = IsFrontSolid ? FrontTileType : TileType;
+			bool IsRelevantSolid = IsFrontSolid ? true : IsSolid;
+
+
+			if (IsRelevantSolid && RelevantTileType != TILE_NOHOOK && RelevantTileType != TILE_FREEZE && RelevantTileType != TILE_DEATH)
+			{
+				// Check line of sight from m_Pos
+				vec2 CollisionPoint;
+				int HitTileType = GameServer()->Collision()->IntersectLine(m_Pos, TargetTileCenterPos, &CollisionPoint, nullptr);
+
+				// If IntersectLine returned НЕ 0 (т.е. было столкновение с каким-то тайлом)
+				// И точка столкновения (CollisionPoint) НЕ является примерно той же точкой, что и центр целевого тайла (TargetTileCenterPos)
+				// (с небольшим допуском, например, 4.0f, чтобы избежать проблем с точностью float),
+				// то это означает, что на пути к целевому тайлу есть препятствие.
+				if (HitTileType != 0 && distance(CollisionPoint, TargetTileCenterPos) > 4.0f)
+				{
+					continue; // Пропускаем этот тайл, так как есть препятствие
+				}
+				// Else, no significant obstacle or the collision is with the target tile itself.
+				
+				HookTargetPos = TargetTileCenterPos;
+				return true; // Found a suitable tile
+			}
+		}
+	}
+
+	return false; // No suitable tile found
+}
+
+bool CCharacter::TryAutoHookSave()
+{
+	// 1. Проверка условий для активации
+	if (!m_Alive || m_FreezeTime > 0 || m_Core.m_DeepFrozen || m_Core.m_LiveFrozen || m_Core.m_HookState != HOOK_IDLE)
+	{
+		return false;
+	}
+
+	// Проверка задержки перед повторной попыткой авто-крюка
+	if (m_LastAutoHookTick != 0 && Server()->Tick() < m_LastAutoHookTick + (g_Config.m_SvAutoHookSaveCooldown * Server()->TickSpeed() / 1000))
+	{
+		return false; 
+	}
+
+	// 2. Вызов FindHookTargetTile
+	vec2 HookTargetPos;
+	// PredictedFreezePos пока не используется, передаем временное значение
+	if (!FindHookTargetTile(vec2(0,0), HookTargetPos))
+	{
+		return false;
+	}
+
+	// 3. Активация крюка
+	vec2 HookDir = normalize(HookTargetPos - m_Pos);
+
+	// Модифицируем m_Input. Эти значения будут использованы в CCharacterCore::Tick()
+	m_Input.m_TargetX = round_to_int(HookDir.x * 100.0f);
+	m_Input.m_TargetY = round_to_int(HookDir.y * 100.0f);
+	m_Input.m_Hook = 1; // Устанавливаем, что кнопка крюка "нажата"
+
+	// Не нужно напрямую вызывать m_Core.Tick() или m_Core.FireHook() отсюда, 
+	// так как m_Input будет обработан в основном цикле CCharacter::Tick -> CCharacterCore::Tick.
+	// Важно, чтобы это изменение m_Input произошло до того, как CCharacterCore::Tick будет вызван с этим m_Input.
+
+	m_LastAutoHookTick = Server()->Tick();
+	
+	if(g_Config.m_Debug) // Используем существующий debug флаг
+	{
+		char aBuf[256];
+		str_format(aBuf, sizeof(aBuf), "Player %d: Auto-hook activated towards (%.2f, %.2f)",
+			m_pPlayer->GetCid(), HookTargetPos.x, HookTargetPos.y);
+		GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "autohook", aBuf);
+	}
+
+	return true;
 }
