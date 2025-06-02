@@ -271,6 +271,71 @@ void SStringConfigVariable::ResetToOld()
 	str_copy(m_pStr, m_pOldValue, m_MaxSize);
 }
 
+// ----- SFloatConfigVariable
+
+void SFloatConfigVariable::CommandCallback(IConsole::IResult *pResult, void *pUserData)
+{
+	SFloatConfigVariable *pThis = static_cast<SFloatConfigVariable *>(pUserData);
+	if(pThis->CheckReadOnly()) return;
+
+	if(pResult->NumArguments())
+	{
+		pThis->SetValue(pResult->GetFloat(0));
+	}
+	else
+	{
+		char aBuf[256];
+		pThis->m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, pThis->m_pScriptName, pThis->Serialize(aBuf, sizeof(aBuf), *pThis->m_pVariable));
+	}
+}
+
+void SFloatConfigVariable::Register()
+{
+	m_pConsole->Register(m_pScriptName, "?f[value]", m_Flags, SFloatConfigVariable::CommandCallback, this, m_pHelp);
+}
+
+bool SFloatConfigVariable::IsDefault() const
+{
+	return *m_pVariable == m_Default;
+}
+
+void SFloatConfigVariable::Serialize(char *pOut, size_t Size, float Value) const
+{
+	str_format(pOut, Size, "%.5f", Value); // Adjust precision as needed
+}
+
+void SFloatConfigVariable::Serialize(char *pOut, size_t Size) const
+{
+	Serialize(pOut, Size, *m_pVariable);
+}
+
+void SFloatConfigVariable::SetValue(float Value)
+{
+	if(CheckReadOnly()) return;
+	char aBuf[256];
+	m_OldValue = *m_pVariable;
+	if(Value < m_Min)
+		Value = m_Min;
+	else if(Value > m_Max)
+		Value = m_Max;
+	*m_pVariable = Value;
+	m_pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, m_pScriptName,
+		str_format(aBuf, sizeof(aBuf), "Value changed to %.5f", *m_pVariable)); // Adjust precision
+}
+
+void SFloatConfigVariable::ResetToDefault()
+{
+	if(CheckReadOnly()) return;
+	m_OldValue = *m_pVariable;
+	*m_pVariable = m_Default;
+}
+
+void SFloatConfigVariable::ResetToOld()
+{
+	if(CheckReadOnly()) return;
+	*m_pVariable = m_OldValue;
+}
+
 // ----------------------- Config Manager
 CConfigManager::CConfigManager()
 {
@@ -316,11 +381,18 @@ void CConfigManager::Init()
 		AddVariable(m_ConfigHeap.Allocate<SStringConfigVariable>(m_pConsole, #ScriptName, SConfigVariable::VAR_STRING, Flags, pHelp, g_Config.m_##Name, Def, Len, pOldValue)); \
 	}
 
+#define MACRO_CONFIG_FLOAT(Name, ScriptName, Def, Min, Max, Flags, Desc) \
+	{ \
+		const char *pHelp = Desc " (default: " #Def ", min: " #Min ", max: " #Max ")"; \
+		AddVariable(m_ConfigHeap.Allocate<SFloatConfigVariable>(m_pConsole, #ScriptName, SConfigVariable::VAR_FLOAT, Flags, pHelp, &g_Config.m_##Name, Def, Min, Max)); \
+	}
+
 #include "config_variables.h"
 
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
+#undef MACRO_CONFIG_FLOAT
 
 	m_pConsole->Register("reset", "s[config-name]", CFGFLAG_SERVER | CFGFLAG_CLIENT | CFGFLAG_STORE, Con_Reset, this, "Reset a config to its default value");
 	m_pConsole->Register("toggle", "s[config-option] s[value 1] s[value 2]", CFGFLAG_SERVER | CFGFLAG_CLIENT, Con_Toggle, this, "Toggle config value");
