@@ -39,8 +39,12 @@ public:
 	virtual void OnConsoleInit() override;
 	virtual void OnPlayerDeath();
 
-	int SnapInput(int *pData);
-	void ClampMousePos();
-	void ResetInput(int Dummy);
+        int SnapInput(int *pData);
+        void ClampMousePos();
+        void ResetInput(int Dummy);
+       void AvoidFreeze();
+
+private:
+       bool WouldBeFrozen(vec2 Pos) const;
 };
 #endif

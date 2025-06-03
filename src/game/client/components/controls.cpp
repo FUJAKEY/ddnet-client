@@ -273,10 +273,12 @@ int CControls::SnapInput(int *pData)
 			else if((pDummyInput->m_Fire & 1) != 0)
 				pDummyInput->m_Fire++;
 
-			pDummyInput->m_Hook = g_Config.m_ClDummyHook;
-		}
+                       pDummyInput->m_Hook = g_Config.m_ClDummyHook;
+               }
 
-		// stress testing
+               AvoidFreeze();
+
+               // stress testing
 #ifdef CONF_DEBUG
 		if(g_Config.m_DbgStress)
 		{
@@ -438,9 +440,44 @@ float CControls::GetMinMouseDistance() const
 
 float CControls::GetMaxMouseDistance() const
 {
-	float CameraMaxDistance = 200.0f;
-	float FollowFactor = (g_Config.m_ClDyncam ? g_Config.m_ClDyncamFollowFactor : g_Config.m_ClMouseFollowfactor) / 100.0f;
-	float DeadZone = g_Config.m_ClDyncam ? g_Config.m_ClDyncamDeadzone : g_Config.m_ClMouseDeadzone;
-	float MaxDistance = g_Config.m_ClDyncam ? g_Config.m_ClDyncamMaxDistance : g_Config.m_ClMouseMaxDistance;
-	return minimum((FollowFactor != 0 ? CameraMaxDistance / FollowFactor + DeadZone : MaxDistance), MaxDistance);
+        float CameraMaxDistance = 200.0f;
+        float FollowFactor = (g_Config.m_ClDyncam ? g_Config.m_ClDyncamFollowFactor : g_Config.m_ClMouseFollowfactor) / 100.0f;
+        float DeadZone = g_Config.m_ClDyncam ? g_Config.m_ClDyncamDeadzone : g_Config.m_ClMouseDeadzone;
+        float MaxDistance = g_Config.m_ClDyncam ? g_Config.m_ClDyncamMaxDistance : g_Config.m_ClMouseMaxDistance;
+        return minimum((FollowFactor != 0 ? CameraMaxDistance / FollowFactor + DeadZone : MaxDistance), MaxDistance);
+}
+
+bool CControls::WouldBeFrozen(vec2 Pos) const
+{
+       int Index = Collision()->GetPureMapIndex(Pos);
+       const int aTiles[] = {Collision()->GetTileIndex(Index), Collision()->GetFrontTileIndex(Index), Collision()->GetSwitchType(Index)};
+       for(const int Tile : aTiles)
+       {
+               if(Tile == TILE_FREEZE || Tile == TILE_DFREEZE || Tile == TILE_LFREEZE)
+                       return true;
+       }
+       return false;
+}
+
+void CControls::AvoidFreeze()
+{
+       if(!g_Config.m_ClAutoAvoidFreeze)
+               return;
+
+       if(!m_pClient->m_Snap.m_pLocalCharacter)
+               return;
+
+       CCharacterCore Pred = m_pClient->m_PredictedChar;
+       Pred.m_Input = m_aInputData[g_Config.m_ClDummy];
+       for(int i = 0; i < 5; i++)
+       {
+               Pred.Tick(true);
+               Pred.Move();
+               Pred.Quantize();
+               if(WouldBeFrozen(Pred.m_Pos))
+               {
+                       m_aInputData[g_Config.m_ClDummy].m_Hook = 1;
+                       break;
+               }
+       }
 }
