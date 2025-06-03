@@ -185,11 +185,14 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 		First = false; \
 	}
 
+// MACRO_CONFIG_FLOAT was here
+
 #include <engine/shared/config_variables.h>
 
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
+// #undef MACRO_CONFIG_FLOAT was here
 
 	str_copy(aJson, "},\"tuning\":{");
 	Write(aJson, str_length(aJson));
