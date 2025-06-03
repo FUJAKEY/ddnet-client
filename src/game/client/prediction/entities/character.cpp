@@ -571,90 +571,232 @@ void CCharacter::ResetInput()
 
 void CCharacter::PreTick()
 {
-	if(g_Config.m_ClAvoidFreeze && m_IsLocal && !m_FreezeTime && !m_Core.m_DeepFrozen && !m_Core.m_LiveFrozen && GameWorld()->GameTick() > m_LastAvoidFreezeHookTick + GameWorld()->GameTickSpeed() / 2)
+	char aBuf[256]; // Буфер для форматированных сообщений
+
+	// Логирование начальных условий (можно обернуть в if(g_Config.m_SomeDebugCvar) если нужно)
+	str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] Tick: %d, IsLocal: %d, ClAvoidFreeze: %d", GameWorld()->GameTick(), m_IsLocal, g_Config.m_ClAvoidFreeze);
+	GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+	str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] FreezeTime: %d, DeepFrozen: %d, LiveFrozen: %d", m_FreezeTime, m_Core.m_DeepFrozen, m_Core.m_LiveFrozen);
+	GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+	long long NextPossibleAvoidTick = (long long)m_LastAvoidFreezeHookTick + GameWorld()->GameTickSpeed() / 2;
+	str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] LastAvoidHookTick: %d, NextPossibleAvoidTick: %lld, ConditionMet: %d",
+		m_LastAvoidFreezeHookTick,
+		NextPossibleAvoidTick,
+		(GameWorld()->GameTick() > NextPossibleAvoidTick)
+	);
+	GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+	bool bMainCondition = g_Config.m_ClAvoidFreeze && m_IsLocal && !m_FreezeTime && !m_Core.m_DeepFrozen && !m_Core.m_LiveFrozen && (GameWorld()->GameTick() > NextPossibleAvoidTick);
+	str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] Main condition to enter logic: %s", bMainCondition ? "MET" : "NOT MET");
+	GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+	int SwitchTileType = 0; // Initialize SwitchTileType
+	bool bAvoidFreezeHookSet = false;
+	int TargetXByAvoidFreeze = 0;
+	int TargetYByAvoidFreeze = 0;
+
+	if(bMainCondition) // if(g_Config.m_ClAvoidFreeze && m_IsLocal && !m_FreezeTime && !m_Core.m_DeepFrozen && !m_Core.m_LiveFrozen && GameWorld()->GameTick() > m_LastAvoidFreezeHookTick + GameWorld()->GameTickSpeed() / 2)
 	{
-		CCharacterCore TempCore = m_Core;
-		TempCore.m_Pos = m_Pos; // Use current rendered position for prediction start
-		TempCore.m_Vel = m_Core.m_Vel; // Use current core velocity
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", "[AVOID_FREEZE_DEBUG] === Avoid freeze logic entered ===");
+		// CCharacterCore TempCore = m_Core; // Removed
+		// TempCore.m_Pos = m_Pos; // Use current rendered position for prediction start // Removed
+		// TempCore.m_Vel = m_Core.m_Vel; // Use current core velocity // Removed
 
-		for(int i = 0; i < 5; ++i) // Predict up to 5 ticks ahead
+		// for(int i = 0; i < g_Config.m_ClAvoidFreezePredictionTicks; ++i) // Predict up to 5 ticks ahead // Removed
+		// { // Removed
+		// Simplified simulation for TempCore // Removed
+		// TempCore.m_Vel.y += TempCore.m_Tuning.m_Gravity; // Removed
+
+		// Store position before move, in case MoveBox results in a stuck state or large correction // Removed
+		// vec2 OriginalPos = TempCore.m_Pos; // Removed
+		// vec2 OriginalVel = TempCore.m_Vel; // Removed
+
+		// TempCore.Move(); // This uses CCharacterCore::Move which calls CCollision::MoveBox // Removed
+
+		// Check if character got stuck or moved significantly due to unhookable/stopper, invalidate prediction then. // Removed
+		// This is a rough check; a more robust solution might involve analyzing CCollision::MoveBox's behavior. // Removed
+		// if(distance(OriginalPos + OriginalVel, TempCore.m_Pos) > 75.0f && length(OriginalVel) > 1.0f) // Large correction or unexpected stop // Removed
+		// { // Removed
+		// Potentially stuck or hit something unexpected, abort prediction for safety // Removed
+		// break; // Removed
+		// } // Removed
+
+		// int PredictedTileIndex = Collision()->GetPureMapIndex(TempCore.m_Pos); // Removed
+		// int MainTile = Collision()->GetTileIndex(PredictedTileIndex); // Removed
+		// int FrontTile = Collision()->GetFrontTileIndex(PredictedTileIndex); // Removed
+		// Basic check for switch layer freeze tiles - this is a simplification. // Removed
+		// A full check would involve `Collision()->GetSwitchType(PredictedTileIndex)` and `Switchers()[...].m_aStatus[Team()]`. // Removed
+		// This simplified check assumes any freeze tile type on switch layer is active for now. // Removed
+		// int SwitchTile = 0; // SwitchTile is not used, SwitchTileType is used instead. // Removed
+		// if(Collision()->SwitchLayer() != nullptr) // Check if switch layer exists // Removed
+		// { // Added missing opening brace // Removed
+		// PredictedTileIndex должен быть валидным индексом для этого слоя // Removed
+		// if(PredictedTileIndex >= 0 && PredictedTileIndex < Collision()->GetWidth() * Collision()->GetHeight()) // Add bounds check for PredictedTileIndex // Removed
+		// { // Removed
+		// CSwitchTile *pSwitchTile = Collision()->SwitchLayer() + PredictedTileIndex; // Incorrect initialization, pSwitchTile is declared below // Removed
+		// const CSwitchTile *pSwitchTile = &(Collision()->SwitchLayer()[PredictedTileIndex]); // Correct way to get pSwitchTile // Removed
+		// if(pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE)) // Removed
+		// { // Removed
+		// Further check if this switch is active for the player's team (complex, omitted for brevity here, assuming active for now if tile type matches) // Removed
+		// For a simple approach, we can assume if a freeze tile is on a switch, it might be active. // Removed
+		// This part needs the actual Switchers() state from the client's game context, which might not be directly available in CCharacter easily. // Removed
+		// For now, let's consider any freeze tile on switch layer as a potential threat. // Removed
+		// A proper implementation would need to check team's Switcher status for pSwitchTile->m_Number. // Removed
+		// As a placeholder, if there's a freeze-typed switch tile, we consider it a threat. // Removed
+		// TODO: Properly check if the switch (pSwitchTile->m_Number) is active for the player's team. // Removed
+		// SwitchTileType = pSwitchTile->m_Type; // Assign to SwitchTileType, which is initialized at the beginning of the function // Removed
+		// Новый код: // Removed
+		// bool bSwitchIsActive = false; // Removed
+		// if(pSwitchTile->m_Number == 0) // Глобальные (ненумерованные) тайлы на слое Switch считаются активными по своему типу // Removed
+		// { // Removed
+		// bSwitchIsActive = true; // Removed
+		// } // Removed
+		// else if(pSwitchTile->m_Number > 0 && !Switchers().empty() && pSwitchTile->m_Number < (int)Switchers().size()) // Removed
+		// { // Removed
+		// Для локального игрока (m_IsLocal) мы можем проверить состояние его команды // Removed
+		// Team() вернет команду текущего персонажа (локального, если m_IsLocal) // Removed
+		// Switchers() вернет данные для команды локального игрока из Client()->GameClient()->Teams() // Removed
+		// if (Team() != TEAM_SUPER && Switchers()[pSwitchTile->m_Number].m_aStatus[Team()]) // Removed
+		// { // Removed
+		// bSwitchIsActive = true; // Removed
+		// } // Removed
+		// } // Removed
+
+		// if(bSwitchIsActive) // Removed
+		// { // Removed
+		// SwitchTileType = pSwitchTile->m_Type; // Removed
+		// } // Removed
+		// } // Removed
+		// } // Removed
+		// } // Removed
+
+
+		// if(MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE || // Removed
+		//    FrontTile == TILE_FREEZE || FrontTile == TILE_DFREEZE || FrontTile == TILE_LFREEZE || // Removed
+		//    SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE) // Check SwitchTileType here // Removed
+		// { // Removed
+		// m_Input.m_Hook = 1; // Removed
+
+		// float TargetX = 0.0f; // Removed
+		// if(m_Core.m_Vel.x != 0.0f) // Removed
+		// TargetX = m_Core.m_Vel.x * 10.0f; // Removed
+		// m_Input.m_TargetX = (int)TargetX; // Removed
+		// m_Input.m_TargetY = -100; // Removed
+
+		// m_LastAvoidFreezeHookTick = GameWorld()->GameTick(); // Removed
+		// TargetXByAvoidFreeze = m_Input.m_TargetX; // Removed
+		// TargetYByAvoidFreeze = m_Input.m_TargetY; // Removed
+		// bAvoidFreezeHookSet = true; // Removed
+		// goto end_prediction_logic; // Removed
+		// } // Removed
+
+		// If TempCore hits ground (y velocity becomes positive after being negative, or very small) // Removed
+		// and it's not in freeze yet, it might be safe, so stop predicting further down this path. // Removed
+		// This is a heuristic to avoid unnecessary hooks if landing safely. // Removed
+		// bool PredictedGrounded = TempCore.Collision()->CheckPoint(TempCore.m_Pos.x, TempCore.m_Pos.y + CCharacterCore::PhysicalSize() / 2.0f + 5.0f); // Removed
+		// if (OriginalVel.y < 0 && TempCore.m_Vel.y >= 0.1f && PredictedGrounded) // Removed
+		// { // Removed
+		// break; // Removed
+		// } // Removed
+		// } // Removed
+		// end_prediction_logic:; // Removed
+
+		float NumTicksFloat = static_cast<float>(g_Config.m_ClAvoidFreezePredictionTicks);
+		vec2 InitialPos = m_Pos;
+		vec2 InitialVel = m_Core.m_Vel;
+		float GravityEffect = m_Core.m_Tuning.m_Gravity;
+
+		vec2 PredictedPos;
+		PredictedPos.x = InitialPos.x + InitialVel.x * NumTicksFloat;
+		PredictedPos.y = InitialPos.y + InitialVel.y * NumTicksFloat + 0.5f * GravityEffect * NumTicksFloat * NumTicksFloat;
+
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] PredictionTicksCfg: %d, NumTicksFloat: %.2f", g_Config.m_ClAvoidFreezePredictionTicks, NumTicksFloat); // NumTicksFloat уже должен быть определен здесь
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] InitialPos: %.2f, %.2f | InitialVel: %.2f, %.2f | Gravity: %.2f", InitialPos.x, InitialPos.y, InitialVel.x, InitialVel.y, GravityEffect); // InitialPos и др. уже должны быть определены
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] PredictedPos: %.2f, %.2f", PredictedPos.x, PredictedPos.y); // PredictedPos уже должен быть определен
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+		int PredictedTileIndex = Collision()->GetPureMapIndex(PredictedPos);
+		int MainTile = Collision()->GetTileIndex(PredictedTileIndex);
+		int FrontTile = Collision()->GetFrontTileIndex(PredictedTileIndex);
+
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] PredictedTileIndex: %d, MainTile: %d, FrontTile: %d", PredictedTileIndex, MainTile, FrontTile); // PredictedTileIndex и др. уже должны быть определены
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+		// SwitchTileType инициализируется как 0 в начале PreTick
+		if(Collision()->SwitchLayer() != nullptr)
 		{
-			// Simplified simulation for TempCore
-			TempCore.m_Vel.y += TempCore.m_Tuning.m_Gravity;
-
-			// Store position before move, in case MoveBox results in a stuck state or large correction
-			vec2 OriginalPos = TempCore.m_Pos;
-			vec2 OriginalVel = TempCore.m_Vel;
-
-			TempCore.Move(); // This uses CCharacterCore::Move which calls CCollision::MoveBox
-
-			// Check if character got stuck or moved significantly due to unhookable/stopper, invalidate prediction then.
-			// This is a rough check; a more robust solution might involve analyzing CCollision::MoveBox's behavior.
-			if(distance(OriginalPos + OriginalVel, TempCore.m_Pos) > 50.0f && length(OriginalVel) > 1.0f) // Large correction or unexpected stop
+			// Проверка границ для PredictedTileIndex (важно, т.к. GetPureMapIndex не всегда возвращает валидный индекс для слоев, если точка далеко)
+			if(PredictedTileIndex >= 0 && PredictedTileIndex < (Collision()->GetWidth() * Collision()->GetHeight()))
 			{
-				// Potentially stuck or hit something unexpected, abort prediction for safety
-				break;
-			}
-
-			int PredictedTileIndex = Collision()->GetMapIndex(TempCore.m_Pos);
-			int MainTile = Collision()->GetTileIndex(PredictedTileIndex);
-			int FrontTile = Collision()->GetFrontTileIndex(PredictedTileIndex);
-			// Basic check for switch layer freeze tiles - this is a simplification.
-			// A full check would involve `Collision()->GetSwitchType(PredictedTileIndex)` and `Switchers()[...].m_aStatus[Team()]`.
-			// This simplified check assumes any freeze tile type on switch layer is active for now.
-			int SwitchTile = 0;
-			if (Collision()->GetSwitchLayer()) // Check if switch layer exists
-			{
-				CSwitchTile *pSwitchTile = Collision()->GetSwitchLayer() + PredictedTileIndex;
+				const CSwitchTile *pSwitchTile = &(Collision()->SwitchLayer()[PredictedTileIndex]);
 				if(pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE))
 				{
-					// Further check if this switch is active for the player's team (complex, omitted for brevity here, assuming active for now if tile type matches)
-					// For a simple approach, we can assume if a freeze tile is on a switch, it might be active.
-					// This part needs the actual Switchers() state from the client's game context, which might not be directly available in CCharacter easily.
-					// For now, let's consider any freeze tile on switch layer as a potential threat.
-					// A proper implementation would need to check team's Switcher status for pSwitchTile->m_Number.
-					// As a placeholder, if there's a freeze-typed switch tile, we consider it a threat.
-			// TODO: Properly check if the switch (pSwitchTile->m_Number) is active for the player's team.
-			if(Collision()->SwitchLayer() != nullptr) // Корректная проверка существования слоя
-			{
-				// PredictedTileIndex должен быть валидным индексом для этого слоя
-				if(PredictedTileIndex >= 0 && PredictedTileIndex < Collision()->GetWidth() * Collision()->GetHeight()) // Добавим базовую проверку индекса
-				{
-					const CSwitchTile *pSwitchTile = &(Collision()->SwitchLayer()[PredictedTileIndex]); // Корректное получение указателя
-					SwitchTileType = pSwitchTile->m_Type; // Используем SwitchTileType
+					bool bSwitchIsActive = false;
+					if(pSwitchTile->m_Number == 0)
+					{
+						bSwitchIsActive = true;
+					}
+					else if(pSwitchTile->m_Number > 0 && !Switchers().empty() && pSwitchTile->m_Number < (int)Switchers().size())
+					{
+						if (Team() != TEAM_SUPER && Switchers()[pSwitchTile->m_Number].m_aStatus[Team()])
+						{
+							bSwitchIsActive = true;
+						}
+					}
+
+					if(bSwitchIsActive)
+					{
+						SwitchTileType = pSwitchTile->m_Type;
+					}
 				}
 			}
-
-
-			if(MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE ||
-			   FrontTile == TILE_FREEZE || FrontTile == TILE_DFREEZE || FrontTile == TILE_LFREEZE ||
-			   SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE)
-			{
-				m_Input.m_Hook = 1;
-
-				float TargetX = 0.0f;
-				if(m_Core.m_Vel.x != 0.0f)
-					TargetX = m_Core.m_Vel.x * 10.0f;
-				m_Input.m_TargetX = (int)TargetX;
-				m_Input.m_TargetY = -100;
-
-				m_LastAvoidFreezeHookTick = GameWorld()->GameTick();
-				goto end_prediction_logic;
-			}
-
-			// If TempCore hits ground (y velocity becomes positive after being negative, or very small)
-			// and it's not in freeze yet, it might be safe, so stop predicting further down this path.
-			// This is a heuristic to avoid unnecessary hooks if landing safely.
-			bool PredictedGrounded = TempCore.Collision()->CheckPoint(TempCore.m_Pos.x, TempCore.m_Pos.y + CCharacterCore::PhysicalSize() / 2.0f + 5.0f);
-			if (OriginalVel.y < 0 && TempCore.m_Vel.y >= -0.1f && PredictedGrounded)
-			{
-				break;
-			}
 		}
-		end_prediction_logic:;
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] Final SwitchTileType: %d (after active check)", SwitchTileType);
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+		bool bFreezeConditionDetected = (MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE ||
+		                             FrontTile == TILE_FREEZE || FrontTile == TILE_DFREEZE || FrontTile == TILE_LFREEZE ||
+		                             SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE);
+		str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] Freeze condition detected: %s", bFreezeConditionDetected ? "YES" : "NO");
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+
+		if(bFreezeConditionDetected) // if(MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE || ...
+		{
+			GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", "[AVOID_FREEZE_DEBUG] !!! AVOID FREEZE TRIGGERED !!!");
+			m_Input.m_Hook = 1;
+			float TargetXVel = 0.0f;
+			if(m_Core.m_Vel.x != 0.0f)
+				TargetXVel = m_Core.m_Vel.x * 10.0f;
+			m_Input.m_TargetX = (int)TargetXVel;
+			m_Input.m_TargetY = -100;
+
+			// Переменные TargetXByAvoidFreeze, TargetYByAvoidFreeze, bAvoidFreezeHookSet объявлены в начале PreTick
+			TargetXByAvoidFreeze = m_Input.m_TargetX;
+			TargetYByAvoidFreeze = m_Input.m_TargetY;
+			bAvoidFreezeHookSet = true;
+			m_LastAvoidFreezeHookTick = GameWorld()->GameTick();
+			str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] Hook Target: X=%d, Y=%d. LastAvoidHookTick updated to: %d", m_Input.m_TargetX, m_Input.m_TargetY, m_LastAvoidFreezeHookTick);
+			GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
+			// goto end_prediction_logic; // Больше не нужен
+		}
 	}
 
 	DDRaceTick();
+
+	if(bAvoidFreezeHookSet)
+	{
+		m_Input.m_Hook = 1;
+		m_Input.m_TargetX = TargetXByAvoidFreeze;
+		m_Input.m_TargetY = TargetYByAvoidFreeze;
+	}
+	// After if(bAvoidFreezeHookSet) { ... }
+	str_format(aBuf, sizeof(aBuf), "[AVOID_FREEZE_DEBUG] End of PreTick. bAvoidFreezeHookSet: %d. Final m_Input.Hook: %d, TargetX: %d, TargetY: %d",
+		bAvoidFreezeHookSet, m_Input.m_Hook, m_Input.m_TargetX, m_Input.m_TargetY);
+	GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aBuf);
 
 	m_Core.m_Input = m_Input;
 	m_Core.Tick(true, !m_pGameWorld->m_WorldConfig.m_NoWeakHookAndBounce);
@@ -662,6 +804,39 @@ void CCharacter::PreTick()
 
 void CCharacter::Tick()
 {
+	// В начале функции CCharacter::Tick()
+	static int s_LastAvoidFreezePeriodicLogTick = 0; // Статическая переменная для отслеживания времени
+	char aPeriodicBuf[256]; // Буфер для сообщений
+
+	if(m_IsLocal && g_Config.m_ClAvoidFreeze && GameWorld()->GameTick() >= s_LastAvoidFreezePeriodicLogTick + GameWorld()->GameTickSpeed())
+	{
+		// Расчет предсказанной позиции (аналогично PreTick)
+		// Используем g_Config.m_ClAvoidFreezePredictionTicks для количества тиков вперед по умолчанию для этого лога,
+		// или можно использовать фиксированное значение, например, 5 или 10 тиков, для консистентности лога.
+		// Давайте для этого лога используем фиксированное значение, например, 25 тиков (0.5 секунды),
+		// чтобы видеть более дальнее предсказание, или можно сделать отдельный CVAR для этого.
+		// Пока используем g_Config.m_ClAvoidFreezePredictionTicks.
+
+		float NumTicksFloat = static_cast<float>(g_Config.m_ClAvoidFreezePredictionTicks);
+		vec2 InitialPos = m_Pos; // Текущая позиция
+		vec2 InitialVel = m_Core.m_Vel; // Текущая скорость ядра
+		float GravityEffect = m_Core.m_Tuning.m_Gravity; // Текущая гравитация
+
+		vec2 PeriodicPredictedPos;
+		PeriodicPredictedPos.x = InitialPos.x + InitialVel.x * NumTicksFloat;
+		PeriodicPredictedPos.y = InitialPos.y + InitialVel.y * NumTicksFloat + 0.5f * GravityEffect * NumTicksFloat * NumTicksFloat;
+
+		str_format(aPeriodicBuf, sizeof(aPeriodicBuf),
+			"[AVOID_FREEZE_PERIODIC_PREDICTION] Tick: %d, PredictedPos (in %d ticks): %.2f, %.2f",
+			GameWorld()->GameTick(),
+			g_Config.m_ClAvoidFreezePredictionTicks,
+			PeriodicPredictedPos.x, PeriodicPredictedPos.y
+		);
+		GameWorld()->Client()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze_pred", aPeriodicBuf);
+
+		s_LastAvoidFreezePeriodicLogTick = GameWorld()->GameTick();
+	}
+
 	if(m_pGameWorld->m_WorldConfig.m_NoWeakHookAndBounce)
 	{
 		m_Core.TickDeferred();

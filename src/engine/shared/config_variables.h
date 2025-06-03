@@ -13,6 +13,7 @@
 
 // client
 MACRO_CONFIG_INT(ClAvoidFreeze, cl_avoid_freeze, 0, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Automatically try to hook to avoid freeze zones (client-side prediction)")
+MACRO_CONFIG_INT(ClAvoidFreezePredictionTicks, cl_avoid_freeze_prediction_ticks, 5, 1, 25, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Number of ticks to predict ahead for the 'avoid freeze' feature")
 MACRO_CONFIG_INT(ClPredict, cl_predict, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Predict client movements")
 MACRO_CONFIG_INT(ClPredictDummy, cl_predict_dummy, 1, 0, 1, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Predict dummy movements")
 MACRO_CONFIG_INT(ClAntiPingLimit, cl_antiping_limit, 0, 0, 500, CFGFLAG_CLIENT | CFGFLAG_SAVE, "Adds delay to antiping (0 to disable)")
