@@ -1963,7 +1963,8 @@ void CMenus::RenderSettings(CUIRect MainView)
 		Localize("Graphics"),
 		Localize("Sound"),
 		Localize("DDNet"),
-		Localize("Assets")};
+		Localize("Assets"),
+		"FUJIX"}; // TODO: Localize
 	static CButtonContainer s_aTabButtons[SETTINGS_LENGTH];
 
 	for(int i = 0; i < SETTINGS_LENGTH; i++)
@@ -2026,6 +2027,11 @@ void CMenus::RenderSettings(CUIRect MainView)
 	{
 		GameClient()->m_MenuBackground.ChangePosition(CMenuBackground::POS_SETTINGS_ASSETS);
 		RenderSettingsCustom(MainView);
+	}
+	else if(g_Config.m_UiSettingsPage == SETTINGS_FUJIX)
+	{
+		// GameClient()->m_MenuBackground.ChangePosition(CMenuBackground::POS_SETTINGS_FUJIX); // TODO: Add new background position if desired
+		RenderSettingsFujix(MainView);
 	}
 	else
 	{
@@ -3165,6 +3171,23 @@ void CMenus::RenderSettingsAppearance(CUIRect MainView)
 		RightView.HSplitTop(2 * MarginSmall, nullptr, &RightView);
 		DoLaserPreview(&LaserPreview, LaserDraggerOutlineColor, LaserDraggerInnerColor, LASERTYPE_DRAGGER);
 	}
+}
+
+void CMenus::RenderSettingsFujix(CUIRect MainView)
+{
+	CUIRect Button;
+	// Заголовок вкладки
+	MainView.HSplitTop(30.0f, &Button, &MainView);
+	Ui()->DoLabel(&Button, "FUJIX Settings", 20.0f, TEXTALIGN_ML); // TODO: Localize
+	MainView.HSplitTop(5.0f, nullptr, &MainView);
+
+	// Чекбокс для ClAvoidFreeze
+	MainView.HSplitTop(20.0f, &Button, &MainView);
+	if(DoButton_CheckBox(&g_Config.m_ClAvoidFreeze, "Avoid Freeze", g_Config.m_ClAvoidFreeze, &Button))
+	{
+		g_Config.m_ClAvoidFreeze ^= 1;
+	}
+	// TODO: Add tooltip if necessary using GameClient()->m_Tooltips.DoToolTip()
 }
 
 void CMenus::RenderSettingsDDNet(CUIRect MainView)

@@ -571,6 +571,84 @@ void CCharacter::ResetInput()
 
 void CCharacter::PreTick()
 {
+	if(g_Config.m_ClAvoidFreeze && m_IsLocal && !m_FreezeTime && !m_Core.m_DeepFrozen && !m_Core.m_LiveFrozen && GameWorld()->GameTick() > m_LastAvoidFreezeHookTick + GameWorld()->GameTickSpeed() / 2)
+	{
+		CCharacterCore TempCore = m_Core;
+		TempCore.m_Pos = m_Pos; // Use current rendered position for prediction start
+		TempCore.m_Vel = m_Core.m_Vel; // Use current core velocity
+
+		for(int i = 0; i < 5; ++i) // Predict up to 5 ticks ahead
+		{
+			// Simplified simulation for TempCore
+			TempCore.m_Vel.y += TempCore.m_Tuning.m_Gravity;
+
+			// Store position before move, in case MoveBox results in a stuck state or large correction
+			vec2 OriginalPos = TempCore.m_Pos;
+			vec2 OriginalVel = TempCore.m_Vel;
+
+			TempCore.Move(); // This uses CCharacterCore::Move which calls CCollision::MoveBox
+
+			// Check if character got stuck or moved significantly due to unhookable/stopper, invalidate prediction then.
+			// This is a rough check; a more robust solution might involve analyzing CCollision::MoveBox's behavior.
+			if(distance(OriginalPos + OriginalVel, TempCore.m_Pos) > 50.0f && length(OriginalVel) > 1.0f) // Large correction or unexpected stop
+			{
+				// Potentially stuck or hit something unexpected, abort prediction for safety
+				break;
+			}
+
+			int PredictedTileIndex = Collision()->GetMapIndex(TempCore.m_Pos);
+			int MainTile = Collision()->GetTileIndex(PredictedTileIndex);
+			int FrontTile = Collision()->GetFrontTileIndex(PredictedTileIndex);
+			// Basic check for switch layer freeze tiles - this is a simplification.
+			// A full check would involve `Collision()->GetSwitchType(PredictedTileIndex)` and `Switchers()[...].m_aStatus[Team()]`.
+			// This simplified check assumes any freeze tile type on switch layer is active for now.
+			int SwitchTile = 0;
+			if (Collision()->GetSwitchLayer()) // Check if switch layer exists
+			{
+				CSwitchTile *pSwitchTile = Collision()->GetSwitchLayer() + PredictedTileIndex;
+				if(pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE))
+				{
+					// Further check if this switch is active for the player's team (complex, omitted for brevity here, assuming active for now if tile type matches)
+					// For a simple approach, we can assume if a freeze tile is on a switch, it might be active.
+					// This part needs the actual Switchers() state from the client's game context, which might not be directly available in CCharacter easily.
+					// For now, let's consider any freeze tile on switch layer as a potential threat.
+					// A proper implementation would need to check team's Switcher status for pSwitchTile->m_Number.
+					// As a placeholder, if there's a freeze-typed switch tile, we consider it a threat.
+			// TODO: Properly check if the switch (pSwitchTile->m_Number) is active for the player's team.
+			if (pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE))
+				SwitchTileType = pSwitchTile->m_Type; // Store the type of freeze tile
+				}
+			}
+
+
+			if(MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE ||
+			   FrontTile == TILE_FREEZE || FrontTile == TILE_DFREEZE || FrontTile == TILE_LFREEZE ||
+			   SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE)
+			{
+				m_Input.m_Hook = 1;
+
+				float TargetX = 0.0f;
+				if(m_Core.m_Vel.x != 0.0f)
+					TargetX = m_Core.m_Vel.x * 10.0f;
+				m_Input.m_TargetX = (int)TargetX;
+				m_Input.m_TargetY = -100;
+
+				m_LastAvoidFreezeHookTick = GameWorld()->GameTick();
+				goto end_prediction_logic;
+			}
+
+			// If TempCore hits ground (y velocity becomes positive after being negative, or very small)
+			// and it's not in freeze yet, it might be safe, so stop predicting further down this path.
+			// This is a heuristic to avoid unnecessary hooks if landing safely.
+			bool PredictedGrounded = TempCore.Collision()->CheckPoint(TempCore.m_Pos.x, TempCore.m_Pos.y + CCharacterCore::PhysicalSize().y / 2.0f + 5.0f);
+			if (OriginalVel.y < 0 && TempCore.m_Vel.y >= -0.1f && PredictedGrounded)
+			{
+				break;
+			}
+		}
+		end_prediction_logic:;
+	}
+
 	DDRaceTick();
 
 	m_Core.m_Input = m_Input;
@@ -1180,7 +1258,8 @@ CTeamsCore *CCharacter::TeamsCore()
 }
 
 CCharacter::CCharacter(CGameWorld *pGameWorld, int Id, CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtended) :
-	CEntity(pGameWorld, CGameWorld::ENTTYPE_CHARACTER, vec2(0, 0), CCharacterCore::PhysicalSize())
+	CEntity(pGameWorld, CGameWorld::ENTTYPE_CHARACTER, vec2(0, 0), CCharacterCore::PhysicalSize()),
+	m_LastAvoidFreezeHookTick(0)
 {
 	m_Id = Id;
 	m_IsLocal = false;

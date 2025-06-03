@@ -122,6 +122,8 @@ public:
 	int m_GameTeam;
 	bool m_CanMoveInFreeze;
 
+	int m_LastAvoidFreezeHookTick; // Для таймаута авто-крюка
+
 	bool Match(CCharacter *pChar) const;
 	void ResetPrediction();
 	void SetTuneZone(int Zone);
