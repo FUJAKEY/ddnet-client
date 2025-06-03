@@ -1953,7 +1953,7 @@ void CMenus::RenderSettings(CUIRect MainView)
 	TabBar.HSplitTop(50.0f, &Button, &TabBar);
 	Button.Draw(ms_ColorTabbarActive, IGraphics::CORNER_BR, 10.0f);
 
-	const char *apTabs[SETTINGS_LENGTH] = {
+	const char *apTabs[] = {
 		Localize("Language"),
 		Localize("General"),
 		Localize("Player"),
@@ -1963,7 +1963,9 @@ void CMenus::RenderSettings(CUIRect MainView)
 		Localize("Graphics"),
 		Localize("Sound"),
 		Localize("DDNet"),
+		Localize("Assets")};
 		Localize("Assets"),
+		"FUJIX"}; // TODO: Localize
 		"FUJIX"}; // TODO: Localize
 	static CButtonContainer s_aTabButtons[SETTINGS_LENGTH];
 
@@ -2028,7 +2030,7 @@ void CMenus::RenderSettings(CUIRect MainView)
 		GameClient()->m_MenuBackground.ChangePosition(CMenuBackground::POS_SETTINGS_ASSETS);
 		RenderSettingsCustom(MainView);
 	}
-	else if(g_Config.m_UiSettingsPage == SETTINGS_FUJIX)
+	else if(g_Config.m_UiSettingsPage == std::size(apTabs) - 1) // FUJIX Tab
 	{
 		// GameClient()->m_MenuBackground.ChangePosition(CMenuBackground::POS_SETTINGS_FUJIX); // TODO: Add new background position if desired
 		RenderSettingsFujix(MainView);
@@ -3186,6 +3188,23 @@ void CMenus::RenderSettingsFujix(CUIRect MainView)
 	if(DoButton_CheckBox(&g_Config.m_ClAvoidFreeze, "Avoid Freeze", g_Config.m_ClAvoidFreeze, &Button))
 	{
 		g_Config.m_ClAvoidFreeze ^= 1;
+	}
+	// TODO: Add tooltip if necessary using GameClient()->m_Tooltips.DoToolTip()
+}
+
+void CMenus::RenderSettingsFujix(CUIRect MainView)
+{
+	CUIRect Button;
+	// Headline
+	MainView.HSplitTop(30.0f, &Button, &MainView);
+	Ui()->DoLabel(&Button, "FUJIX Settings", 20.0f, TEXTALIGN_ML); // TODO: Localize
+	MainView.HSplitTop(5.0f, nullptr, &MainView);
+
+	// Checkbox for ClHookUpTesting
+	MainView.HSplitTop(20.0f, &Button, &MainView);
+	if(DoButton_CheckBox(&g_Config.m_ClHookUpTesting, "Hook up (testing)", g_Config.m_ClHookUpTesting, &Button))
+	{
+		g_Config.m_ClHookUpTesting ^= 1;
 	}
 	// TODO: Add tooltip if necessary using GameClient()->m_Tooltips.DoToolTip()
 }

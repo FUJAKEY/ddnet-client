@@ -180,6 +180,8 @@ void CControls::OnMessage(int Msg, void *pRawMsg)
 
 int CControls::SnapInput(int *pData)
 {
+	static float s_LastHookUpTime[NUM_DUMMIES] = {0.0f};
+
 	// update player state
 	if(m_pClient->m_Chat.IsActive())
 		m_aInputData[g_Config.m_ClDummy].m_PlayerFlags = PLAYERFLAG_CHATTING;
@@ -222,7 +224,22 @@ int CControls::SnapInput(int *pData)
 		m_aInputData[g_Config.m_ClDummy].m_TargetX = (int)m_aMousePos[g_Config.m_ClDummy].x;
 		m_aInputData[g_Config.m_ClDummy].m_TargetY = (int)m_aMousePos[g_Config.m_ClDummy].y;
 
-		if(g_Config.m_ClSubTickAiming && m_aMousePosOnAction[g_Config.m_ClDummy] != vec2(0.0f, 0.0f))
+		if(g_Config.m_ClHookUpTesting && Client()->LocalTime() > s_LastHookUpTime[g_Config.m_ClDummy] + time_freq())
+		{
+			// Store original target to restore it later if needed, though for hook it might not be.
+			// For this specific feature, we want to override the current mouse aim for the hook.
+			m_aInputData[g_Config.m_ClDummy].m_TargetX = 0;
+			m_aInputData[g_Config.m_ClDummy].m_TargetY = -100; // Large negative Y for upwards
+			if((m_aInputData[g_Config.m_ClDummy].m_Hook&1) == 0) // Trigger hook if not already hooking
+				m_aInputData[g_Config.m_ClDummy].m_Hook++;
+			s_LastHookUpTime[g_Config.m_ClDummy] = Client()->LocalTime();
+			// Note: This will briefly override player's mouse aim for the hook action.
+			// If we wanted to preserve mouse aim for other actions in the same tick,
+			// we'd need a more complex setup, possibly involving restoring m_TargetX/Y
+			// after this block, or handling this as a separate, temporary input override.
+			// For now, this simpler approach should work for testing the hook-up feature.
+		}
+		else if(g_Config.m_ClSubTickAiming && m_aMousePosOnAction[g_Config.m_ClDummy] != vec2(0.0f, 0.0f))
 		{
 			m_aInputData[g_Config.m_ClDummy].m_TargetX = (int)m_aMousePosOnAction[g_Config.m_ClDummy].x;
 			m_aInputData[g_Config.m_ClDummy].m_TargetY = (int)m_aMousePosOnAction[g_Config.m_ClDummy].y;
