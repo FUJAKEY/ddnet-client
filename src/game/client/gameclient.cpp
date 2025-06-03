@@ -2391,6 +2391,39 @@ void CGameClient::OnPredict()
 			pDummyChar->OnPredictedInput(pDummyInputData);
 		m_PredictedWorld.Tick();
 
+			// Freeze avoidance prediction
+			if(g_Config.m_ClAvoidFreezeEnable && pLocalChar) // Ensure pLocalChar is not null
+			{
+				int MaxPredictionTicksForFreezeCheck = (g_Config.m_ClAvoidFreezePredictionTimeMs * Client()->GameTickSpeed()) / 1000;
+				int TicksAhead = Tick - Client()->GameTick(g_Config.m_ClDummy);
+
+				if(TicksAhead <= MaxPredictionTicksForFreezeCheck)
+				{
+					vec2 PredictedPos = pLocalChar->Core()->m_Pos;
+					int MapIndex = Collision()->GetMapIndex(PredictedPos);
+
+					if(MapIndex >= 0)
+					{
+						int TileType = Collision()->GetTileIndex(MapIndex);
+						int FrontTileType = Collision()->GetFrontTileIndex(MapIndex);
+
+						// Check for standard freeze and deep freeze tiles
+						// TILE_LFREEZE is usually for laser stoppers, not map tiles, so might not be needed here.
+						bool IsFreeze = (TileType == TILE_FREEZE || TileType == TILE_DFREEZE ||
+										 FrontTileType == TILE_FREEZE || FrontTileType == TILE_DFREEZE);
+
+						if(IsFreeze)
+						{
+							char aDbgMsgBuf[256];
+							str_format(aDbgMsgBuf, sizeof(aDbgMsgBuf), "Freeze predicted: tick %d (current_server_tick: %d, target_pred_tick: %d), pos (%.0f, %.0f)",
+								Tick, Client()->GameTick(g_Config.m_ClDummy), Client()->PredGameTick(g_Config.m_ClDummy), PredictedPos.x, PredictedPos.y);
+							Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "avoid_freeze", aDbgMsgBuf);
+							// Optional: break here if we only want to log the first predicted freeze encounter in the sequence
+						}
+					}
+				}
+			}
+
 		// fetch the current characters
 		if(Tick == PredictionTick)
 		{
