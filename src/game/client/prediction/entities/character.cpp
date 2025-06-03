@@ -571,6 +571,7 @@ void CCharacter::ResetInput()
 
 void CCharacter::PreTick()
 {
+	int SwitchTileType = 0; // Initialize SwitchTileType
 	if(g_Config.m_ClAvoidFreeze && m_IsLocal && !m_FreezeTime && !m_Core.m_DeepFrozen && !m_Core.m_LiveFrozen && GameWorld()->GameTick() > m_LastAvoidFreezeHookTick + GameWorld()->GameTickSpeed() / 2)
 	{
 		CCharacterCore TempCore = m_Core;
@@ -602,33 +603,32 @@ void CCharacter::PreTick()
 			// Basic check for switch layer freeze tiles - this is a simplification.
 			// A full check would involve `Collision()->GetSwitchType(PredictedTileIndex)` and `Switchers()[...].m_aStatus[Team()]`.
 			// This simplified check assumes any freeze tile type on switch layer is active for now.
-			int SwitchTile = 0;
-			if (Collision()->GetSwitchLayer()) // Check if switch layer exists
-			{
-				CSwitchTile *pSwitchTile = Collision()->GetSwitchLayer() + PredictedTileIndex;
-				if(pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE))
-				{
-					// Further check if this switch is active for the player's team (complex, omitted for brevity here, assuming active for now if tile type matches)
-					// For a simple approach, we can assume if a freeze tile is on a switch, it might be active.
-					// This part needs the actual Switchers() state from the client's game context, which might not be directly available in CCharacter easily.
-					// For now, let's consider any freeze tile on switch layer as a potential threat.
-					// A proper implementation would need to check team's Switcher status for pSwitchTile->m_Number.
-					// As a placeholder, if there's a freeze-typed switch tile, we consider it a threat.
-			// TODO: Properly check if the switch (pSwitchTile->m_Number) is active for the player's team.
-			if(Collision()->SwitchLayer() != nullptr) // Корректная проверка существования слоя
-			{
+			// int SwitchTile = 0; // SwitchTile is not used, SwitchTileType is used instead.
+			if(Collision()->SwitchLayer() != nullptr) // Check if switch layer exists
+			{ // Added missing opening brace
 				// PredictedTileIndex должен быть валидным индексом для этого слоя
-				if(PredictedTileIndex >= 0 && PredictedTileIndex < Collision()->GetWidth() * Collision()->GetHeight()) // Добавим базовую проверку индекса
+				if(PredictedTileIndex >= 0 && PredictedTileIndex < Collision()->GetWidth() * Collision()->GetHeight()) // Add bounds check for PredictedTileIndex
 				{
-					const CSwitchTile *pSwitchTile = &(Collision()->SwitchLayer()[PredictedTileIndex]); // Корректное получение указателя
-					SwitchTileType = pSwitchTile->m_Type; // Используем SwitchTileType
+					// CSwitchTile *pSwitchTile = Collision()->SwitchLayer() + PredictedTileIndex; // Incorrect initialization, pSwitchTile is declared below
+					const CSwitchTile *pSwitchTile = &(Collision()->SwitchLayer()[PredictedTileIndex]); // Correct way to get pSwitchTile
+					if(pSwitchTile && (pSwitchTile->m_Type == TILE_FREEZE || pSwitchTile->m_Type == TILE_DFREEZE || pSwitchTile->m_Type == TILE_LFREEZE))
+					{
+						// Further check if this switch is active for the player's team (complex, omitted for brevity here, assuming active for now if tile type matches)
+						// For a simple approach, we can assume if a freeze tile is on a switch, it might be active.
+						// This part needs the actual Switchers() state from the client's game context, which might not be directly available in CCharacter easily.
+						// For now, let's consider any freeze tile on switch layer as a potential threat.
+						// A proper implementation would need to check team's Switcher status for pSwitchTile->m_Number.
+						// As a placeholder, if there's a freeze-typed switch tile, we consider it a threat.
+						// TODO: Properly check if the switch (pSwitchTile->m_Number) is active for the player's team.
+						SwitchTileType = pSwitchTile->m_Type; // Assign to SwitchTileType, which is initialized at the beginning of the function
+					}
 				}
 			}
 
 
 			if(MainTile == TILE_FREEZE || MainTile == TILE_DFREEZE || MainTile == TILE_LFREEZE ||
 			   FrontTile == TILE_FREEZE || FrontTile == TILE_DFREEZE || FrontTile == TILE_LFREEZE ||
-			   SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE)
+			   SwitchTileType == TILE_FREEZE || SwitchTileType == TILE_DFREEZE || SwitchTileType == TILE_LFREEZE) // Check SwitchTileType here
 			{
 				m_Input.m_Hook = 1;
 
