@@ -2168,7 +2168,7 @@ void CCharacter::DDRaceTick()
 				{
 					if (g_Config.m_Debug)
 					{
-						GameServer()->Console()->Printf(IConsole::OUTPUT_LEVEL_DEBUG, "autohook",
+						GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "autohook",
 							"Player %d: Auto-hook save successfully initiated.",
 							m_pPlayer->GetCid());
 					}

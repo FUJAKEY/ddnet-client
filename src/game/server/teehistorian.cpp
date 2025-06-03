@@ -185,11 +185,14 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 		First = false; \
 	}
 
+#define MACRO_CONFIG_FLOAT(Name, ScriptName, Def, Min, Max, Flags, Desc)         if((Flags)&CFGFLAG_SERVER && !((Flags)&CFGFLAG_NONTEEHISTORIC) && pGameInfo->m_pConfig->m_##Name != (Def))         {             str_format(aJson, sizeof(aJson), "%s\"%s\":%.5f",                 First ? "" : ",",                 E(aBuffer1, #ScriptName),                 pGameInfo->m_pConfig->m_##Name);             Write(aJson, str_length(aJson));             First = false;         }
+
 #include <engine/shared/config_variables.h>
 
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
+#undef MACRO_CONFIG_FLOAT
 
 	str_copy(aJson, "},\"tuning\":{");
 	Write(aJson, str_length(aJson));
