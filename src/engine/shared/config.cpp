@@ -271,6 +271,8 @@ void SStringConfigVariable::ResetToOld()
 	str_copy(m_pStr, m_pOldValue, m_MaxSize);
 }
 
+// ----- SFloatConfigVariable was here
+
 // ----------------------- Config Manager
 CConfigManager::CConfigManager()
 {
@@ -316,11 +318,14 @@ void CConfigManager::Init()
 		AddVariable(m_ConfigHeap.Allocate<SStringConfigVariable>(m_pConsole, #ScriptName, SConfigVariable::VAR_STRING, Flags, pHelp, g_Config.m_##Name, Def, Len, pOldValue)); \
 	}
 
+// MACRO_CONFIG_FLOAT was here
+
 #include "config_variables.h"
 
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
+// #undef MACRO_CONFIG_FLOAT was here
 
 	m_pConsole->Register("reset", "s[config-name]", CFGFLAG_SERVER | CFGFLAG_CLIENT | CFGFLAG_STORE, Con_Reset, this, "Reset a config to its default value");
 	m_pConsole->Register("toggle", "s[config-option] s[value 1] s[value 2]", CFGFLAG_SERVER | CFGFLAG_CLIENT, Con_Toggle, this, "Toggle config value");

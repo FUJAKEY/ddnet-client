@@ -31,10 +31,12 @@ public:
 #define MACRO_CONFIG_STR(Name, ScriptName, Len, Def, Flags, Desc) \
 	static constexpr const char *ms_p##Name = Def; \
 	char m_##Name[Len]; // Flawfinder: ignore
+// MACRO_CONFIG_FLOAT was here
 #include "config_variables.h"
 #undef MACRO_CONFIG_INT
 #undef MACRO_CONFIG_COL
 #undef MACRO_CONFIG_STR
+// #undef MACRO_CONFIG_FLOAT was here
 };
 
 extern CConfig g_Config;
@@ -67,6 +69,7 @@ struct SConfigVariable
 		VAR_INT,
 		VAR_COLOR,
 		VAR_STRING,
+		// VAR_FLOAT was here
 	};
 	IConsole *m_pConsole;
 	const char *m_pScriptName;
@@ -191,6 +194,8 @@ struct SStringConfigVariable : public SConfigVariable
 	void ResetToDefault() override;
 	void ResetToOld() override;
 };
+
+// struct SFloatConfigVariable was here
 
 class CConfigManager : public IConfigManager
 {
